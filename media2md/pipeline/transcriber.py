@@ -39,38 +39,51 @@ def get_whisper_config(env_path: Optional[str] = None) -> dict:
     return config
 
 
-def probe_known_local_profile() -> dict | None:
-    """探测已知的本机 ACER Whisper 配置。
-
-    在 ACER 机器上验证过以下路径:
-    D:/AI_Video_Knowledge_Base/.venv/Scripts/whisper-ctranslate2.exe
-    D:/AI_Video_Knowledge_Base/models/models--Systran--faster-whisper-medium/snapshots/08e178d48790749d25932bbc082711ddcfdfbc4f/model.bin
-    """
-    candidates = {
-        "exe": "D:/AI_Video_Knowledge_Base/.venv/Scripts/whisper-ctranslate2.exe",
-        "model_dir": "D:/AI_Video_Knowledge_Base/models/models--Systran--faster-whisper-medium/snapshots/08e178d48790749d25932bbc082711ddcfdfbc4f",
-        "model_cache_dir": "D:/AI_Video_Knowledge_Base/models",
-    }
-
-    exe_path = Path(candidates["exe"])
-    model_bin = Path(candidates["model_dir"]) / "model.bin"
-
-    if exe_path.exists() and model_bin.exists():
-        return {
-            "exe": str(exe_path),
-            "model_dir": str(candidates["model_dir"]),
-            "model_cache_dir": str(candidates["model_cache_dir"]),
-            "local_files_only": True,
-        }
+def probe_project_venv() -> dict | None:
+    """探测项目 .venv 中是否安装了 whisper-ctranslate2。"""
+    from media2md.utils.config import find_project_root
+    project_root = find_project_root()
+    
+    # 检查项目 .venv 中的 whisper-ctranslate2
+    venv_exe = project_root / ".venv" / "Scripts" / "whisper-ctranslate2.exe"
+    if venv_exe.exists():
+        # 检查项目 models 目录中的模型
+        models_dir = project_root / "models"
+        model_dir = None
+        if models_dir.exists():
+            for d in models_dir.iterdir():
+                if d.is_dir():
+                    model_bin = d / "model.bin"
+                    if not model_bin.exists():
+                        for snap in d.rglob("model.bin"):
+                            model_bin = snap
+                            break
+                    if model_bin.exists():
+                        model_dir = str(model_bin.parent)
+                        break
+        
+        if model_dir:
+            return {
+                "exe": str(venv_exe),
+                "model_dir": model_dir,
+                "model_cache_dir": str(models_dir),
+                "local_files_only": True,
+            }
+        else:
+            return {
+                "exe": str(venv_exe),
+                "model_dir": None,
+                "model_cache_dir": str(models_dir) if models_dir.exists() else None,
+                "local_files_only": False,
+            }
     return None
-
 
 def resolve_whisper() -> dict:
     """解析 Whisper 可执行文件路径和模型路径。
 
     优先级:
     1. .env 配置的 WHISPER_CTRANSLATE2_EXE
-    2. 已知本地 ACER 配置
+    2. 项目 .venv 中的 whisper-ctranslate2
     3. PATH 中的 whisper-ctranslate2
     """
     config = get_whisper_config()
@@ -80,7 +93,7 @@ def resolve_whisper() -> dict:
         return config
 
     # 探测已知本地配置
-    local = probe_known_local_profile()
+    local = probe_project_venv()
     if local:
         return local
 

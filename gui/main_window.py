@@ -414,6 +414,22 @@ class Media2MDWindow(QMainWindow):
             QMessageBox.warning(self, "提示", "请先打开文件。")
             return
 
+        # 检查 Whisper 是否可用
+        wcfg = resolve_whisper()
+        if not wcfg.get("exe"):
+            reply = QMessageBox.question(
+                self, "首次使用",
+                "未检测到 Whisper 转写引擎。\n\n"
+                "首次使用需要运行环境初始化：\n"
+                "1. 安装 whisper-ctranslate2\n"
+                "2. 下载语音识别模型 (~1.5GB)\n\n"
+                "是否现在初始化？",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            )
+            if reply == QMessageBox.StandardButton.Yes:
+                self._on_setup()
+            return
+
         self.status_bar.showMessage("正在转写（后台运行，不影响操作）...")
         self._start_task(
             transcribe_file,
