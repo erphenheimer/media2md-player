@@ -182,8 +182,9 @@ class Media2MDWindow(QMainWindow):
 
     def _on_task_finished(self, result):
         """后台任务成功完成 — 由子类重写具体行为。"""
-        self._worker_thread.quit()
-        self._worker_thread.wait()
+        if self._worker_thread is not None:
+            self._worker_thread.quit()
+            self._worker_thread.wait()
         self._worker_thread = None
         self._worker = None
         self._set_buttons_enabled(True)
@@ -347,11 +348,12 @@ class Media2MDWindow(QMainWindow):
         # 重连信号以处理转写结果
         self._worker.finished.connect(self._on_transcribe_done)
 
+
     def _on_transcribe_done(self, result):
         """转写完成后在主线程更新 UI。"""
         self.transcript = result
         self._display_transcript(self.transcript)
-        self._on_task_finished(result)
+
 
     # ---- AI 修正 ----
 
@@ -382,7 +384,7 @@ class Media2MDWindow(QMainWindow):
         self.status_bar.showMessage(
             f"修正完成: {len(result.logs)} 处修改, {len(result.review_needed)} 处待审核"
         )
-        self._on_task_finished(result)
+
 
     # ---- 导读 ----
 
@@ -411,7 +413,7 @@ class Media2MDWindow(QMainWindow):
         guide_md = guide.to_markdown()
         self.transcript_edit.setPlainText(guide_md)
         self.status_bar.showMessage("导读生成完成")
-        self._on_task_finished(guide)
+
 
     # ---- 导出 ----
 
