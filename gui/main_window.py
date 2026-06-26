@@ -9,7 +9,7 @@ os.environ.setdefault("PYTHONUTF8", "1")
 
 from PyQt6.QtCore import Qt, QUrl, QTimer, QThread, pyqtSignal, QObject
 from PyQt6.QtGui import QAction, QFont, QColor, QTextCursor
-from PyQt6.QtMultimedia import QMediaPlayer
+from PyQt6.QtMultimedia import QMediaPlayer, QAudioOutput
 from PyQt6.QtMultimediaWidgets import QVideoWidget
 from PyQt6.QtWidgets import (
     QApplication,
@@ -144,6 +144,9 @@ class Media2MDWindow(QMainWindow):
         self.config = load_env()
         self.api_config = get_api_config(self.config)
 
+        self.audio_output = QAudioOutput()
+        self.audio_output.setVolume(0.8)
+
         # 后台线程管理
         self._worker_thread: QThread | None = None
         self._worker: Worker | None = None
@@ -244,6 +247,7 @@ class Media2MDWindow(QMainWindow):
         self.video_widget.setMinimumSize(400, 300)
         video_layout.addWidget(self.video_widget)
         self.player = QMediaPlayer()
+        self.player.setAudioOutput(self.audio_output)
         self.player.setVideoOutput(self.video_widget)
         self.player.positionChanged.connect(self._on_position_changed)
         self.player.durationChanged.connect(self._on_duration_changed)

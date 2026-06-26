@@ -46,7 +46,7 @@ def extract_embedded_subtitles(
     ]
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=30
+            cmd, capture_output=True, text=True, errors='replace', timeout=30
         )
         stderr = result.stderr
     except (subprocess.TimeoutExpired, FileNotFoundError) as e:
@@ -90,7 +90,7 @@ def extract_embedded_subtitle_to_file(
         str(output_path),
     ]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=120, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=120, check=True)
         return Path(output_path)
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         return None

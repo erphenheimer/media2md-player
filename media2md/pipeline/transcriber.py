@@ -119,7 +119,7 @@ def extract_audio_from_video(
         str(output_path),
     ]
     try:
-        subprocess.run(cmd, capture_output=True, text=True, timeout=300, check=True)
+        subprocess.run(cmd, capture_output=True, text=True, errors='replace', timeout=300, check=True)
         return Path(output_path).exists()
     except (subprocess.TimeoutExpired, subprocess.CalledProcessError, FileNotFoundError):
         return False
@@ -263,7 +263,7 @@ def transcribe(
 
     try:
         result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=3600, env=env
+            cmd, capture_output=True, text=True, errors='replace', timeout=3600, env=env
         )
         if result.returncode != 0:
             # CUDA 失败时自动回退 CPU
