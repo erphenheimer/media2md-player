@@ -22,12 +22,21 @@ cd media2md-player
 python -m venv .venv
 .venv\Scripts\activate
 
-# 安装依赖
+# 安装基础依赖
 pip install -e .
 
-# 配置 API（修正和导读需要）
+# 配置 API（修正和导读需要 DeepSeek/Kimi API Key）
 cp .env.example .env
 # 编辑 .env 填入 API_KEY 等配置
+
+# 初始化 Whisper 环境（自动安装 whisper-ctranslate2 + 下载模型）
+media2md setup
+
+# 配置转写参数（可选）
+media2md config whisper.device cpu          # 使用 CPU 转写
+media2md config whisper.model tiny          # 使用 tiny 模型（更快）
+media2md config                             # 查看所有配置
+media2md setup --check                      # 检测环境
 
 # 处理单个文件
 media2md process video.mp4 --output ./output
@@ -36,6 +45,20 @@ media2md process video.mp4 --output ./output
 pip install -e ".[gui]"
 media2md-gui
 ```
+
+## 命令参考
+
+| 命令 | 用途 |
+|---|---|
+| `media2md process <file>` | 全流程：转写→修正→导读→导出 |
+| `media2md transcribe <file>` | 仅转写 |
+| `media2md correct <file>` | 仅 AI 修正 |
+| `media2md guide <file>` | 仅生成导读 |
+| `media2md setup` | 初始化环境（安装 Whisper + 下载模型） |
+| `media2md setup --check` | 检测环境状态 |
+| `media2md config` | 查看所有配置 |
+| `media2md config <key> <value>` | 修改配置 |
+| `media2md-gui` | 启动图形界面 |
 
 ## 项目结构
 

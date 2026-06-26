@@ -27,6 +27,11 @@ from PyQt6.QtWidgets import (
     QToolBar,
     QStatusBar,
     QStyle,
+    QDialog,
+    QDialogButtonBox,
+    QFormLayout,
+    QComboBox,
+    QGroupBox,
 )
 
 from media2md.models.transcript import Transcript, SourceType
@@ -39,7 +44,68 @@ from media2md.pipeline.exporter import (
     export_guide,
     generate_output_paths,
 )
-from media2md.utils.config import load_env, get_api_config
+from media2md.utils.config import load_env, get_api_config, get_whisper_config
+
+
+# ========================================================================
+# 设置对话框
+# ========================================================================
+
+class SettingsDialog(QDialog):
+    """Whisper 参数设置对话框。"""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("设置")
+        self.resize(450, 400)
+
+        from media2md.utils.config import config_list, config_set
+
+        self._config_set = config_set
+        layout = QVBoxLayout(self)
+
+        whisper_group = QGroupBox("Whisper 转写设置")
+        whisper_form = QFormLayout(whisper_group)
+
+        cfgs = {c["key"]: c for c in config_list()}
+
+        self.model_combo = QComboBox()
+        for m in ["tiny", "base", "small", "medium", "large"]:
+            self.model_combo.addItem(m)
+        self.model_combo.setCurrentText(cfgs.get("whisper.model", {}).get("value", "medium"))
+        whisper_form.addRow("模型大小:", self.model_combo)
+
+        self.device_combo = QComboBox()
+        self.device_combo.addItems(["cuda", "cpu"])
+        self.device_combo.setCurrentText(cfgs.get("whisper.device", {}).get("value", "cuda"))
+        whisper_form.addRow("转写设备:", self.device_combo)
+
+        self.compute_combo = QComboBox()
+        self.compute_combo.addItems(["float16", "int8", "float32"])
+        current = cfgs.get("whisper.compute_type", {}).get("value", "float16")
+        self.compute_combo.setCurrentText(current)
+        whisper_form.addRow("计算精度:", self.compute_combo)
+
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItems(["zh", "en", "ja", "auto"])
+        self.lang_combo.setCurrentText(cfgs.get("whisper.language", {}).get("value", "zh"))
+        whisper_form.addRow("语言:", self.lang_combo)
+
+        layout.addWidget(whisper_group)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(self._on_accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+
+    def _on_accept(self):
+        self._config_set("whisper.model", self.model_combo.currentText())
+        self._config_set("whisper.device", self.device_combo.currentText())
+        self._config_set("whisper.compute_type", self.compute_combo.currentText())
+        self._config_set("whisper.language", self.lang_combo.currentText())
+        self.accept()
 
 
 # ========================================================================
@@ -221,6 +287,15 @@ class Media2MDWindow(QMainWindow):
         guide_action = QAction("生成导读(&G)", self)
         guide_action.triggered.connect(self._on_generate_guide)
         process_menu.addAction(guide_action)
+
+        # 设置菜单
+        settings_menu = menubar.addMenu("设置(&S)")
+        setup_action = QAction("初始化环境(&I)...", self)
+        setup_action.triggered.connect(self._on_setup)
+        settings_menu.addAction(setup_action)
+        pref_action = QAction("Whisper 参数(&P)...", self)
+        pref_action.triggered.connect(self._on_settings)
+        settings_menu.addAction(pref_action)
 
     def _build_toolbar(self):
         toolbar = QToolBar("主工具栏")
@@ -428,6 +503,39 @@ class Media2MDWindow(QMainWindow):
         paths = generate_output_paths(stem, output_dir)
         export_transcript(self.transcript, paths["transcript"])
         self.status_bar.showMessage(f"导出完成: {paths['transcript']}")
+
+    # ---- 设置 ----
+
+    def _on_settings(self):
+        """打开设置对话框。"""
+        dlg = SettingsDialog(self)
+        dlg.exec()
+
+    def _on_setup(self):
+        """初始化环境。"""
+        from media2md.pipeline.setup import check_env, run_setup as _run_setup
+
+        env = check_env()
+        if env.ready_to_transcribe:
+            QMessageBox.information(self, "初始化", "环境已就绪，无需初始化。")
+            return
+
+        msg = "将执行以下步骤:\n"
+        if not env.whisper_ok:
+            msg += "  1. 安装 whisper-ctranslate2\n"
+        if not env.model_exists:
+            msg += "  2. 下载 Whisper 模型 (medium)\n"
+        msg += "\n继续吗？"
+
+        reply = QMessageBox.question(self, "初始化环境", msg,
+                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        self.status_bar.showMessage("正在初始化...")
+        self._start_task(_run_setup)
+        self._worker.finished.connect(lambda r: self.status_bar.showMessage("初始化完成"))
+        self._worker.error.connect(lambda e: self.status_bar.showMessage(f"初始化失败: {e[:50]}"))
 
     # ---- 播放控制 ----
 

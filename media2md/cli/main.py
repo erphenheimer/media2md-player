@@ -39,6 +39,18 @@ def main():
     p_export.add_argument("input", help="文稿数据路径")
     p_export.add_argument("--output", "-o", default="output", help="输出目录")
 
+    # media2md setup
+    p_setup = sub.add_parser("setup", help="初始化环境（安装 Whisper + 下载模型）")
+    p_setup.add_argument("--model", default="medium", help="模型大小: tiny/base/small/medium/large (默认: medium)")
+    p_setup.add_argument("--check", action="store_true", help="仅检测环境，不安装")
+    p_setup.add_argument("--auto", action="store_true", help="自动模式，不询问")
+
+    # media2md config
+    p_config = sub.add_parser("config", help="配置管理")
+    p_config.add_argument("key", nargs="?", default=None, help="配置项键名, 如 whisper.device")
+    p_config.add_argument("value", nargs="?", default=None, help="配置项值")
+    p_config.add_argument("--list", action="store_true", dest="list_all", help="列出所有配置")
+
     args = parser.parse_args()
     if args.command is None:
         parser.print_help()
@@ -55,6 +67,10 @@ def main():
         run_guide(args)
     elif args.command == "export":
         run_export(args)
+    elif args.command == "setup":
+        run_setup(args)
+    elif args.command == "config":
+        run_config(args)
 
 
 def run_process(args):
@@ -157,6 +173,63 @@ def run_export(args):
         print(f"[DONE] 导出完成: {out_path}")
     else:
         print(f"跳过: {src.name}（目前仅支持 .json 格式导出）")
+
+
+def run_setup(args):
+    """初始化环境。"""
+    from media2md.pipeline.setup import check_env, run_setup as _run_setup
+
+    if args.check:
+        env = check_env()
+        print("=== 环境检测 ===")
+        for k, v in env.to_dict().items():
+            icon = "OK" if k.endswith("_ok") and v else "MISSING" if k.endswith("_ok") else ""
+            if k.endswith("_ok"):
+                print(f"  {k}: {icon}")
+            elif k == "python":
+                print(f"  Python: {v.split()[0]}")
+            elif k == "ffmpeg":
+                print(f"  FFmpeg: {v or 'NOT FOUND'}")
+            elif k == "whisper":
+                print(f"  Whisper: {v or 'NOT INSTALLED'}")
+            elif k == "cuda":
+                print(f"  CUDA: {'AVAILABLE' if v else 'NOT DETECTED'}")
+        print(f"\n  转写就绪: {'YES' if env.ready_to_transcribe else 'NO'}")
+        return
+
+    success = _run_setup(model=args.model, auto=args.auto)
+    sys.exit(0 if success else 1)
+
+
+def run_config(args):
+    """配置管理。"""
+    from media2md.utils.config import config_list, config_get, config_set, ALL_SETTINGS
+
+    if args.list_all or (not args.key and not args.value):
+        print("=== 当前配置 ===")
+        for item in config_list():
+            mark = "*" if item["is_set"] else " "
+            print(f"  [{mark}] {item['key']} = {item['value']}")
+            print(f"        {item['description']}")
+        print(f"\n  [*] = 已自定义  [ ] = 使用默认值")
+        print(f"  使用 media2md config <key> <value> 修改配置")
+        print(f"  例如: media2md config whisper.device cpu")
+        return
+
+    if args.key and args.value:
+        env_key = config_set(args.key, args.value)
+        print(f"已设置: {env_key}={config_get(args.key)}")
+        return
+
+    if args.key:
+        val = config_get(args.key)
+        if args.key in ALL_SETTINGS:
+            desc = ALL_SETTINGS[args.key][1]
+            default = ALL_SETTINGS[args.key][0]
+            print(f"{args.key} = {val}  (默认: {default}, {desc})")
+        else:
+            print(f"{args.key} = {val or '(未设置)'}")
+        return
 
 
 if __name__ == "__main__":

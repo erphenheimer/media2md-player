@@ -11,6 +11,7 @@ from typing import Optional
 
 from media2md.models.transcript import Transcript, TranscriptSegment, SourceType
 from media2md.utils.timestamp import parse_srt_timestamp
+from media2md.utils.config import get_whisper_config as _get_whisper_cfg
 
 
 def get_whisper_config(env_path: Optional[str] = None) -> dict:
@@ -290,10 +291,10 @@ def transcribe_file(
     source_path: str | Path,
     process_dir: str | Path,
     ffmpeg_path: str = "ffmpeg",
-    model: str = "medium",
-    language: str = "zh",
-    device: str = "cuda",
-    compute_type: str = "float16",
+    model: str = "",
+    language: str = "",
+    device: str = "",
+    compute_type: str = "",
 ) -> Transcript:
     """处理单个文件：如果是视频先提取音频，再转写。
 
@@ -301,16 +302,21 @@ def transcribe_file(
         source_path: 源文件路径（音频或视频）
         process_dir: 工作目录（存放中间文件）
         ffmpeg_path: ffmpeg 路径
-        model/language/device/compute_type: Whisper 参数
+        model/language/device/compute_type: Whisper 参数，空字符串时从 .env 读取
 
     Returns:
         Transcript
     """
+    # 从 .env 读取未指定的参数
+    wcfg = _get_whisper_cfg()
+    model = model or wcfg["model"]
+    language = language or wcfg["language"]
+    device = device or wcfg["device"]
+    compute_type = compute_type or wcfg["compute_type"]
+
     src = Path(source_path)
     proc = Path(process_dir)
     proc.mkdir(parents=True, exist_ok=True)
-
-    # 检查是否已有缓存
     cache_file = proc / "transcripts" / f"{src.stem}.json"
     if cache_file.exists():
         return _parse_whisper_json(cache_file)
