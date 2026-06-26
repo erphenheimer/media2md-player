@@ -195,59 +195,100 @@ def download_model(
 ) -> bool:
     """下载 Whisper 模型。
 
-    通过运行 whisper-ctranslate2 触发自动下载。
+    生成静音 WAV 文件并运行 whisper-ctranslate2 触发实际模型下载，
+    下载后自动查找 model.bin 路径并写入 .env 配置。
     """
+    import struct
+    import math
+    import tempfile
+
     project_root = find_project_root()
     if models_dir is None:
         models_dir = str(project_root / "models")
-
     os.makedirs(models_dir, exist_ok=True)
 
     if progress_callback:
-        progress_callback(f"正在下载 {model_name} 模型（首次下载需数分钟）...")
+        progress_callback(f"正在下载 {model_name} 模型（首次下载需数分钟，下载约 1-2GB）...")
 
     venv_exe = project_root / ".venv" / "Scripts" / "whisper-ctranslate2.exe"
     whisper_exe = str(venv_exe) if venv_exe.exists() else "whisper-ctranslate2"
 
+    # Create a minimal silent WAV file to trigger real transcription + download
+    sample_rate = 16000
+    duration = 1  # 1 second of silence
+    num_samples = sample_rate * duration
+    wav_dir = Path(tempfile.gettempdir())
+    wav_path = wav_dir / "_media2md_setup_silence.wav"
+
+    with open(wav_path, "wb") as f:
+        data_size = num_samples * 2
+        f.write(b"RIFF")
+        f.write(struct.pack("<I", 36 + data_size))
+        f.write(b"WAVE")
+        f.write(b"fmt ")
+        f.write(struct.pack("<IHHIIHH", 16, 1, 1, sample_rate, sample_rate * 2, 2, 16))
+        f.write(b"data")
+        f.write(struct.pack("<I", data_size))
+        samples = b"\x00\x00" * num_samples
+        f.write(samples)
+
     try:
-        # 用一段简短音频触发模型下载 (直接从系统麦克风不行，用静音WAV)
-        # 实际上 whisper-ctranslate2 接受 --model_dir 参数，如果模型不存在会自动下载
-        # 用 --model_dir 指定目标下载位置
+        if progress_callback:
+            progress_callback(f"  运行 Whisper 以触发模型下载...")
         r = subprocess.run(
-            [
-                whisper_exe,
-                "--model", model_name,
-                "--model_dir", models_dir,
-                "--local_files_only", "False",
-                "--help",
-            ],
-            capture_output=True, text=True, timeout=30,
+            [whisper_exe, str(wav_path), "--model", model_name,
+             "--model_dir", models_dir, "--local_files_only", "False",
+             "--output_format", "txt", "--output_dir", str(wav_dir)],
+            capture_output=True, text=True, timeout=1200,  # 20 min timeout for large model download
         )
-        # --help 不会下载模型，但可以用一个简短命令触发下载
-        # 更好的方式是用 Python 直接调用 huggingface_hub 下载
-        # 但最简单的方案是用 whisper-ctranslate2 跑一个静音输入
         if progress_callback:
-            progress_callback("模型下载触发成功")
-
-        # 验证模型是否存在
-        for p in Path(models_dir).iterdir():
-            if p.is_dir() and "medium" in p.name.lower():
-                model_bin = p / "model.bin"
-                if model_bin.exists():
-                    # 写入 .env 配置
-                    config_set("whisper.model_dir", str(p))
-                    config_set("whisper.model_cache_dir", models_dir)
-                    if progress_callback:
-                        progress_callback(f"模型已下载: {p.name}")
-                    return True
-
-        if progress_callback:
-            progress_callback("模型需在首次转写时自动下载")
-        return True
+            progress_callback(f"  Whisper 执行完成")
     except Exception as e:
         if progress_callback:
-            progress_callback(f"模型下载出错: {e}")
+            progress_callback(f"  模型下载出错: {e}")
+        # Clean up
+        if wav_path.exists():
+            wav_path.unlink()
         return False
+
+    # Clean up temp files
+    if wav_path.exists():
+        wav_path.unlink()
+    for f in wav_dir.glob("_media2md_setup_silence*"):
+        f.unlink()
+
+    # Find the downloaded model directory
+    models_path = Path(models_dir)
+    found = False
+    for p in models_path.iterdir():
+        if p.is_dir():
+            model_bin = p / "model.bin"
+            if not model_bin.exists():
+                # Check deeper (HuggingFace snapshot structure)
+                for snap in p.rglob("model.bin"):
+                    model_bin = snap
+                    found = True
+                    break
+            if model_bin.exists():
+                found = True
+                model_parent = model_bin.parent
+                if progress_callback:
+                    progress_callback(f"  模型已下载: {model_parent}")
+                # Write exact snapshot path to .env
+                config_set("whisper.model_dir", str(model_parent))
+                config_set("whisper.model_cache_dir", models_dir)
+                break
+
+    if found:
+        config_set("whisper.model", model_name)
+        if progress_callback:
+            progress_callback("✅ 模型就绪")
+        return True
+    else:
+        if progress_callback:
+            progress_callback(f"  模型目录: {models_path}")
+            progress_callback("  模型将在首次转写时自动下载")
+        return True  # Not a failure, model may download on first use
 
 
 def run_setup(
