@@ -29,6 +29,7 @@ from PyQt6.QtWidgets import (
     QFormLayout,
     QComboBox,
     QGroupBox,
+    QLineEdit,
 )
 
 from media2md.models.transcript import Transcript, SourceType
@@ -799,6 +800,88 @@ class Media2MDWindow(QMainWindow):
 
         layout.addWidget(whisper_group)
 
+        # ---- API 配置组 ----
+        api_group = QGroupBox("API 配置（AI 修正/导读）")
+        api_form = QFormLayout(api_group)
+        api_form.setSpacing(12)
+        api_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        # API 提供商
+        self.api_provider_combo = QComboBox()
+        self.api_provider_combo.addItems(["deepseek", "openai", "kimi", "custom"])
+        self.api_provider_combo.setCurrentText(cfgs.get("api.provider", {}).get("value", "deepseek"))
+        def _on_provider_change(provider):
+            config_set("api.provider", provider)
+            # Auto-fill URL and model based on provider
+            presets = {
+                "deepseek": ("https://api.deepseek.com/v1/chat/completions", "deepseek-chat"),
+                "openai": ("https://api.openai.com/v1/chat/completions", "gpt-4o-mini"),
+                "kimi": ("https://api.moonshot.cn/v1/chat/completions", "moonshot-v1-8k"),
+                "custom": ("", ""),
+            }
+            url, model = presets.get(provider, ("", ""))
+            if url:
+                self.api_url_input.setText(url)
+                config_set("api.url", url)
+            if model:
+                self.api_model_input.setText(model)
+                config_set("api.model", model)
+        self.api_provider_combo.currentTextChanged.connect(_on_provider_change)
+        api_form.addRow("提供商:", self.api_provider_combo)
+
+        # API Key (password field with show/hide)
+        key_layout = QHBoxLayout()
+        self.api_key_input = QLineEdit()
+        self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+        current_key = cfgs.get("api.key", {}).get("value", "")
+        self.api_key_input.setText("********" if current_key and current_key != "your_api_key_here" else "")
+        self.api_key_input.setPlaceholderText("输入 API Key")
+        key_layout.addWidget(self.api_key_input)
+        
+        self.api_key_toggle = QPushButton("显示")
+        self.api_key_toggle.setFixedWidth(50)
+        self.api_key_toggle.setStyleSheet("QPushButton { font-size: 11px; padding: 2px 6px; }")
+        def _toggle_key():
+            if self.api_key_input.echoMode() == QLineEdit.EchoMode.Password:
+                self.api_key_input.setEchoMode(QLineEdit.EchoMode.Normal)
+                self.api_key_toggle.setText("隐藏")
+            else:
+                self.api_key_input.setEchoMode(QLineEdit.EchoMode.Password)
+                self.api_key_toggle.setText("显示")
+        self.api_key_toggle.clicked.connect(_toggle_key)
+        key_layout.addWidget(self.api_key_toggle)
+        
+        api_form.addRow("API Key:", key_layout)
+
+        # API URL
+        self.api_url_input = QLineEdit()
+        self.api_url_input.setText(cfgs.get("api.url", {}).get("value", "https://api.deepseek.com/v1/chat/completions"))
+        self.api_url_input.setPlaceholderText("https://api.deepseek.com/v1/chat/completions")
+        self.api_url_input.textChanged.connect(lambda t: config_set("api.url", t))
+        api_form.addRow("API 地址:", self.api_url_input)
+
+        # Model Name
+        self.api_model_input = QLineEdit()
+        self.api_model_input.setText(cfgs.get("api.model", {}).get("value", "deepseek-chat"))
+        self.api_model_input.setPlaceholderText("deepseek-chat")
+        self.api_model_input.textChanged.connect(lambda t: config_set("api.model", t))
+        api_form.addRow("模型名:", self.api_model_input)
+
+        # Test Connection button
+        test_layout = QHBoxLayout()
+        self.api_test_btn = QPushButton("测试连接")
+        self.api_test_btn.setObjectName("action_btn")
+        self.api_test_btn.setStyleSheet("QPushButton { background-color: #2E7D32; border-color: #388E3C; } QPushButton:hover { background-color: #388E3C; }")
+        self.api_test_btn.clicked.connect(self._on_test_api)
+        test_layout.addWidget(self.api_test_btn)
+        
+        self.api_test_status = QLabel("")
+        self.api_test_status.setStyleSheet("color: #888888; font-style: italic; padding: 4px 0;")
+        test_layout.addWidget(self.api_test_status, 1)
+        api_form.addRow("", test_layout)
+
+        layout.addWidget(api_group)
+
         # ---- 环境初始化组 ----
         setup_group = QGroupBox("环境初始化")
         setup_layout = QVBoxLayout(setup_group)
@@ -1050,6 +1133,58 @@ class Media2MDWindow(QMainWindow):
         self.setup_status.setText("\u274c 初始化失败")
         self.setup_status.setStyleSheet("color: #EF5350; font-style: normal;")
         self.status_bar.showMessage(f"初始化失败: {message[:50]}")
+
+    def _on_test_api(self):
+        """测试 API 连接是否可用。"""
+        import requests
+        from media2md.utils.config import load_env, get_api_config
+        
+        cfg = load_env()
+        api_cfg = get_api_config(cfg)
+        key = api_cfg.get("api_key", "")
+        url = api_cfg.get("api_url", "")
+        
+        if not key or key == "your_api_key_here":
+            # Try to read from the input field
+            key_text = self.api_key_input.text().strip()
+            if key_text and key_text != "********":
+                config_set("api.key", key_text)
+                cfg = load_env()  # reload
+                api_cfg = get_api_config(cfg)
+                key = api_cfg.get("api_key", "")
+        
+        if not key or key == "your_api_key_here":
+            self.api_test_status.setText("❌ 请先输入 API Key")
+            self.api_test_status.setStyleSheet("color: #f44336; padding: 4px 0;")
+            return
+        
+        self.api_test_status.setText("⏳ 测试中...")
+        self.api_test_status.setStyleSheet("color: #FFA726; padding: 4px 0;")
+        QApplication.processEvents()
+        
+        try:
+            headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+            payload = {
+                "model": api_cfg.get("model_name", "deepseek-chat"),
+                "messages": [{"role": "user", "content": "Hello"}],
+                "max_tokens": 5,
+            }
+            resp = requests.post(url, headers=headers, json=payload, timeout=15)
+            if resp.status_code == 200:
+                self.api_test_status.setText("✅ 连接成功")
+                self.api_test_status.setStyleSheet("color: #4CAF50; padding: 4px 0;")
+            else:
+                self.api_test_status.setText(f"❌ 错误 {resp.status_code}: {resp.text[:60]}")
+                self.api_test_status.setStyleSheet("color: #f44336; padding: 4px 0;")
+        except requests.exceptions.ConnectTimeout:
+            self.api_test_status.setText("❌ 连接超时")
+            self.api_test_status.setStyleSheet("color: #f44336; padding: 4px 0;")
+        except requests.exceptions.ConnectionError:
+            self.api_test_status.setText("❌ 无法连接（网络或URL错误）")
+            self.api_test_status.setStyleSheet("color: #f44336; padding: 4px 0;")
+        except Exception as e:
+            self.api_test_status.setText(f"❌ {str(e)[:40]}")
+            self.api_test_status.setStyleSheet("color: #f44336; padding: 4px 0;")
 
     # ---- 播放控制 ----
 
