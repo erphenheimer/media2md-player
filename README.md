@@ -9,7 +9,7 @@
 - **AI 修正**：调用 DeepSeek/Kimi 等 API 修正 Whisper 同音字/实体错误
 - **导读生成**：基于文稿生成结构化导读（核心观点、场景建议、行动步骤等）
 - **Markdown 导出**：文稿 + 修正版 + 导读，三者分开导出
-- **GUI 播放器**（开发中）：视频播放 + 时间戳点击跳转
+- **GUI 播放器**：PyQt6 桌面应用，视频播放 + 时间戳点击跳转 + 文稿高亮跟踪
 
 ## 快速开始
 
@@ -31,6 +31,10 @@ cp .env.example .env
 
 # 处理单个文件
 media2md process video.mp4 --output ./output
+
+# 启动 GUI 播放器（需要额外安装 PyQt6）
+pip install -e ".[gui]"
+media2md-gui
 ```
 
 ## 项目结构

@@ -18,8 +18,12 @@ dependencies = [
     "python-dotenv>=1.0.0",
 ]
 
+[project.optional-dependencies]
+gui = ["PyQt6>=6.5"]
+
 [project.scripts]
 media2md = "media2md.cli.main:main"
+media2md-gui = "gui.__main__:main"
 
 [tool.setuptools.packages.find]
 include = ["media2md*", "gui*"]
