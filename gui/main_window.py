@@ -30,6 +30,7 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QGroupBox,
     QLineEdit,
+    QScrollArea,
 )
 
 from media2md.models.transcript import Transcript, SourceType
@@ -153,9 +154,11 @@ QPushButton#action_btn {
     background-color: #2a2a2a;
     border: 1px solid #444444;
     border-radius: 6px;
-    padding: 8px 18px;
-    font-size: 13px;
+    padding: 4px 4px;
+    font-size: 16px;
     font-weight: bold;
+    min-width: 36px;
+    min-height: 28px;
 }
 QPushButton#action_btn:hover {
     background-color: #3a3a3a;
@@ -570,7 +573,7 @@ class Media2MDWindow(QMainWindow):
         video_layout.setSpacing(6)
 
         self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumSize(400, 220)
+        self.video_widget.setMinimumSize(320, 180)
         self.video_widget.setStyleSheet("background-color: #000000; border-radius: 6px;")
         video_layout.addWidget(self.video_widget)
 
@@ -619,24 +622,32 @@ class Media2MDWindow(QMainWindow):
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(8)
 
-        # 操作按钮栏
+        # 操作按钮栏（图标 + tooltip）
         action_bar = QHBoxLayout()
-        action_bar.setSpacing(10)
+        action_bar.setSpacing(6)
 
-        self.btn_transcribe = QPushButton("\U0001f399\ufe0f 转写")
+        self.btn_transcribe = QPushButton("\U0001f399\ufe0f")
+        self.btn_transcribe.setToolTip("转写")
         self.btn_transcribe.setObjectName("action_btn")
+        self.btn_transcribe.setFixedWidth(40)
         self.btn_transcribe.clicked.connect(self._on_transcribe)
 
-        self.btn_correct = QPushButton("\u270f\ufe0f AI修正")
+        self.btn_correct = QPushButton("\u270f\ufe0f")
+        self.btn_correct.setToolTip("AI 修正")
         self.btn_correct.setObjectName("action_btn")
+        self.btn_correct.setFixedWidth(40)
         self.btn_correct.clicked.connect(self._on_correct)
 
-        self.btn_guide = QPushButton("\U0001f4d6 导读")
+        self.btn_guide = QPushButton("\U0001f4d6")
+        self.btn_guide.setToolTip("导读")
         self.btn_guide.setObjectName("action_btn")
+        self.btn_guide.setFixedWidth(40)
         self.btn_guide.clicked.connect(self._on_generate_guide)
 
-        self.btn_export = QPushButton("\U0001f4be 导出")
+        self.btn_export = QPushButton("\U0001f4be")
+        self.btn_export.setToolTip("导出")
         self.btn_export.setObjectName("action_btn")
+        self.btn_export.setFixedWidth(40)
         self.btn_export.clicked.connect(self._on_export)
 
         for btn in [self.btn_transcribe, self.btn_correct, self.btn_guide, self.btn_export]:
@@ -677,18 +688,21 @@ class Media2MDWindow(QMainWindow):
         tab2_layout.addWidget(self.guide_edit)
         self.tab_widget.addTab(self.guide_tab, "导读")
 
-        # ---- Tab 3: 设置 ----
+        # ---- Tab 3: 设置（可滚动） ----
         self.settings_tab = QWidget()
         self._build_settings_form()
-        self.tab_widget.addTab(self.settings_tab, "设置")
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setWidget(self.settings_tab)
+        self.tab_widget.addTab(scroll, "设置")
 
         bottom_layout.addWidget(self.tab_widget)
         splitter.addWidget(bottom_panel)
 
         # 初始比例：视频 35%，内容 65%
-        splitter.setSizes([280, 520])
-        splitter.setStretchFactor(0, 3)
-        splitter.setStretchFactor(1, 7)
+        splitter.setSizes([220, 580])
+        splitter.setStretchFactor(0, 2)
+        splitter.setStretchFactor(1, 8)
 
         right_layout.addWidget(splitter)
         main_layout.addWidget(right_panel)
@@ -700,15 +714,15 @@ class Media2MDWindow(QMainWindow):
     def _build_sidebar(self, parent_layout):
         """构建左侧导航栏。"""
         sidebar = QWidget()
-        sidebar.setFixedWidth(52)
+        sidebar.setFixedWidth(60)
         sidebar.setObjectName("sidebar")
         sidebar.setStyleSheet(
             "QWidget#sidebar { background-color: #252525; border-right: 1px solid #333333; }"
         )
 
         sidebar_layout = QVBoxLayout(sidebar)
-        sidebar_layout.setContentsMargins(0, 4, 0, 4)
-        sidebar_layout.setSpacing(0)
+        sidebar_layout.setContentsMargins(4, 8, 4, 8)
+        sidebar_layout.setSpacing(4)
 
         # 按钮配置：(图标, 提示文本, 回调, 参数)
         btn_configs = [
@@ -749,8 +763,8 @@ class Media2MDWindow(QMainWindow):
     def _build_settings_form(self):
         """构建设置标签页的表单。"""
         layout = QVBoxLayout(self.settings_tab)
-        layout.setSpacing(16)
-        layout.setContentsMargins(16, 16, 16, 16)
+        layout.setSpacing(24)
+        layout.setContentsMargins(20, 20, 20, 20)
 
         # ---- Whisper 设置组 ----
         whisper_group = QGroupBox("Whisper 转写设置")
