@@ -11,6 +11,7 @@ from typing import Optional
 
 from media2md.models.transcript import Transcript, TranscriptSegment, SourceType
 from media2md.utils.timestamp import parse_srt_timestamp
+from media2md.utils.config import load_env as _load_env
 from media2md.utils.config import get_whisper_config as _get_whisper_cfg
 
 
@@ -86,6 +87,9 @@ def resolve_whisper() -> dict:
     2. 项目 .venv 中的 whisper-ctranslate2
     3. PATH 中的 whisper-ctranslate2
     """
+    # 从 .env 加载配置到环境变量，确保 get_whisper_config() 能读取到
+    _load_env()
+
     config = get_whisper_config()
 
     # 如果 .env 已配置且路径存在，直接使用

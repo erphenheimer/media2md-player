@@ -52,8 +52,9 @@ def load_env(env_path: Optional[str | Path] = None) -> dict:
             value = value.strip().strip("\"'")
             if key not in os.environ:
                 config[key] = value
+                os.environ[key] = value
 
-    # 环境变量覆盖
+    # 环境变量覆盖（已存在的环境变量优先）
     for key in [
         "API_KEY", "API_URL", "MODEL_NAME", "API_PROVIDER",
         "WHISPER_CTRANSLATE2_EXE", "WHISPER_MODEL_DIR",
@@ -66,6 +67,7 @@ def load_env(env_path: Optional[str | Path] = None) -> dict:
         val = os.environ.get(key, config.get(key, ""))
         if val:
             config[key] = val
+            os.environ[key] = val
 
     return config
 
