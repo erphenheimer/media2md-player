@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "media2md-player"
+version = "0.1.0"
+description = "音视频 → 文稿 → AI 修正 → 导读 → Markdown 导出一体化工具"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "media2md contributors"},
+]
+
+dependencies = [
+    "requests>=2.28.0",
+    "python-dotenv>=1.0.0",
+]
+
+[project.scripts]
+media2md = "media2md.cli.main:main"
+
+[tool.setuptools.packages.find]
+include = ["media2md*", "gui*"]
