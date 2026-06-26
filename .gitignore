@@ -31,5 +31,10 @@ process/
 *.mp3
 *.mp4
 
+# Build output
+dist/
+build/
+media2md.spec
+
 # Logs
 *.log
