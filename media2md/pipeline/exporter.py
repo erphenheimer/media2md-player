@@ -92,10 +92,10 @@ def generate_output_paths(
     Returns:
         dict: {"transcript": ..., "guide": ..., "corrected": ..., "correction_log": ...}
     """
-    out = Path(output_dir)
+    out = Path(output_dir) / stem
     return {
-        "transcript": out / f"{stem}_transcript.md",
-        "guide": out / f"{stem}_guide.md",
-        "corrected": out / f"{stem}_corrected.md",
-        "correction_log": out / f"{stem}_correction_log.md",
+        "transcript": out / "transcript.md",
+        "guide": out / "guide.md",
+        "corrected": out / "corrected.md",
+        "correction_log": out / "correction_log.md",
     }
