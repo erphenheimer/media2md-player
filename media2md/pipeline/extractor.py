@@ -104,20 +104,25 @@ def extract_transcript(
 
     优先级:
     1. 如果是字幕文件 (.srt/.vtt/.ass)，直接解析
-    2. 如果是视频文件，先查找同级外部字幕
-    3. 如果未找到，尝试提取内嵌字幕
+    2. 如果是视频/音频文件，先查找同级外部字幕
+    3. 如果是视频文件，尝试提取内嵌字幕
     4. 如果均失败，返回空 Transcript（供 Whisper 回退）
     """
     path = Path(source_path)
 
+    # 所有支持的媒体文件后缀
+    video_exts = {".mp4", ".mkv", ".mov", ".avi", ".flv", ".webm", ".wmv", ".m4v"}
+    audio_exts = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus", ".wma"}
+    subtitle_exts = {".srt", ".vtt", ".ass", ".ssa"}
+
     # 情况 1: 直接是字幕文件
-    if path.suffix.lower() in (".srt", ".vtt", ".ass", ".ssa"):
+    if path.suffix.lower() in subtitle_exts:
         transcript = parse_subtitle(path)
         transcript.source_type = SourceType.EXTERNAL_SUBTITLE
         return transcript
 
-    # 情况 2: 视频/音频文件
-    if path.suffix.lower() in (".mp4", ".mkv", ".mov", ".avi", ".flv", ".webm", ".wmv", ".m4v"):
+    # 情况 2: 视频/音频文件 — 先找同级外部字幕
+    if path.suffix.lower() in video_exts | audio_exts:
         # 先找外部字幕
         ext_sub = find_external_subtitle(path)
         if ext_sub:

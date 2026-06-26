@@ -280,9 +280,14 @@ class Media2MDWindow(QMainWindow):
         if self.transcript.segments:
             self._display_transcript(self.transcript)
         else:
-            self.transcript_edit.setPlainText(
-                "未找到字幕。\n\n点击「转写」按钮使用 Whisper 语音识别。"
-            )
+            # 判断文件类型显示不同提示
+            audio_exts = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
+            is_audio = self.current_file.suffix.lower() in audio_exts
+            if is_audio:
+                hint = "音频文件无内嵌字幕。\n\n点击「转写」按钮使用 Whisper 语音识别提取文稿。"
+            else:
+                hint = "未找到字幕。\n\n点击「转写」按钮使用 Whisper 语音识别。"
+            self.transcript_edit.setPlainText(hint)
 
     def _display_transcript(self, transcript: Transcript):
         """在面板中显示文稿。"""
