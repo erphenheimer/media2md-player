@@ -1,4 +1,4 @@
-"""media2md-player GUI 主窗口 — 视频播放器 + 文稿面板。"""
+﻿"""media2md-player GUI 主窗口 — 视频播放器 + 文稿面板（现代化翻新）。"""
 
 import os
 import sys
@@ -24,11 +24,8 @@ from PyQt6.QtWidgets import (
     QLabel,
     QFileDialog,
     QMessageBox,
-    QToolBar,
+    QTabWidget,
     QStatusBar,
-    QStyle,
-    QDialog,
-    QDialogButtonBox,
     QFormLayout,
     QComboBox,
     QGroupBox,
@@ -44,68 +41,303 @@ from media2md.pipeline.exporter import (
     export_guide,
     generate_output_paths,
 )
-from media2md.utils.config import load_env, get_api_config, get_whisper_config
+from media2md.utils.config import (
+    load_env,
+    get_api_config,
+    get_whisper_config,
+    config_list,
+    config_set,
+)
 
 
 # ========================================================================
-# 设置对话框
+# 全局 QSS 暗色主题
 # ========================================================================
 
-class SettingsDialog(QDialog):
-    """Whisper 参数设置对话框。"""
+DARK_THEME_QSS = """
+/* ---- 全局 ---- */
+QMainWindow, QWidget, QDialog {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    font-family: "Microsoft YaHei", "Segoe UI", "PingFang SC", sans-serif;
+    font-size: 13px;
+}
 
-    def __init__(self, parent=None):
-        super().__init__(parent)
-        self.setWindowTitle("设置")
-        self.resize(450, 400)
+/* ---- 菜单栏 ---- */
+QMenuBar {
+    background-color: #252525;
+    color: #cccccc;
+    border-bottom: 1px solid #333333;
+    padding: 2px 0;
+}
+QMenuBar::item {
+    padding: 4px 12px;
+    border-radius: 4px;
+}
+QMenuBar::item:selected {
+    background-color: #333333;
+    color: #ffffff;
+}
 
-        from media2md.utils.config import config_list, config_set
+QMenu {
+    background-color: #2d2d2d;
+    color: #cccccc;
+    border: 1px solid #444444;
+    border-radius: 4px;
+    padding: 4px;
+}
+QMenu::item {
+    padding: 6px 28px 6px 16px;
+    border-radius: 4px;
+}
+QMenu::item:selected {
+    background-color: #2196F3;
+    color: #ffffff;
+}
+QMenu::separator {
+    height: 1px;
+    background: #444444;
+    margin: 4px 8px;
+}
 
-        self._config_set = config_set
-        layout = QVBoxLayout(self)
+/* ---- 按钮 ---- */
+QPushButton {
+    background-color: #333333;
+    color: #ffffff;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 13px;
+    min-height: 20px;
+}
+QPushButton:hover {
+    background-color: #444444;
+    border-color: #2196F3;
+}
+QPushButton:pressed {
+    background-color: #1976D2;
+}
+QPushButton:disabled {
+    background-color: #2a2a2a;
+    color: #666666;
+    border-color: #3a3a3a;
+}
+QPushButton:checked {
+    background-color: #2196F3;
+    border-color: #1976D2;
+}
 
-        whisper_group = QGroupBox("Whisper 转写设置")
-        whisper_form = QFormLayout(whisper_group)
+/* ---- 侧边栏按钮 ---- */
+QPushButton#sidebar_btn {
+    background-color: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 10px 0;
+    font-size: 20px;
+    min-height: 44px;
+    color: #888888;
+}
+QPushButton#sidebar_btn:hover {
+    background-color: #333333;
+    color: #ffffff;
+}
+QPushButton#sidebar_btn:checked {
+    background-color: #2196F3;
+    color: #ffffff;
+    border-left: 3px solid #64B5F6;
+}
 
-        cfgs = {c["key"]: c for c in config_list()}
+/* ---- 操作按钮（转写/修正/导读/导出） ---- */
+QPushButton#action_btn {
+    background-color: #2a2a2a;
+    border: 1px solid #444444;
+    border-radius: 6px;
+    padding: 8px 18px;
+    font-size: 13px;
+    font-weight: bold;
+}
+QPushButton#action_btn:hover {
+    background-color: #3a3a3a;
+    border-color: #2196F3;
+}
+QPushButton#action_btn:pressed {
+    background-color: #1976D2;
+}
+QPushButton#action_btn:disabled {
+    background-color: #222222;
+    color: #555555;
+    border-color: #333333;
+}
 
-        self.model_combo = QComboBox()
-        for m in ["tiny", "base", "small", "medium", "large"]:
-            self.model_combo.addItem(m)
-        self.model_combo.setCurrentText(cfgs.get("whisper.model", {}).get("value", "medium"))
-        whisper_form.addRow("模型大小:", self.model_combo)
+/* ---- 滑块 ---- */
+QSlider::groove:horizontal {
+    background: #444444;
+    height: 4px;
+    border-radius: 2px;
+}
+QSlider::handle:horizontal {
+    background: #2196F3;
+    width: 16px;
+    height: 16px;
+    margin: -6px 0;
+    border-radius: 8px;
+}
+QSlider::handle:horizontal:hover {
+    background: #42A5F5;
+    width: 18px;
+    height: 18px;
+    margin: -7px 0;
+    border-radius: 9px;
+}
+QSlider::sub-page:horizontal {
+    background: #2196F3;
+    border-radius: 2px;
+}
 
-        self.device_combo = QComboBox()
-        self.device_combo.addItems(["cuda", "cpu"])
-        self.device_combo.setCurrentText(cfgs.get("whisper.device", {}).get("value", "cuda"))
-        whisper_form.addRow("转写设备:", self.device_combo)
+/* ---- 文本框 ---- */
+QTextEdit {
+    background-color: #1a1a1a;
+    color: #dddddd;
+    border: 1px solid #444444;
+    border-radius: 6px;
+    padding: 10px;
+    font-size: 14px;
+    selection-background-color: #2196F3;
+    selection-color: #ffffff;
+}
 
-        self.compute_combo = QComboBox()
-        self.compute_combo.addItems(["float16", "int8", "float32"])
-        current = cfgs.get("whisper.compute_type", {}).get("value", "float16")
-        self.compute_combo.setCurrentText(current)
-        whisper_form.addRow("计算精度:", self.compute_combo)
+/* ---- 标签页 ---- */
+QTabWidget::pane {
+    background-color: #1e1e1e;
+    border: 1px solid #444444;
+    border-radius: 0 0 6px 6px;
+    top: -1px;
+}
+QTabBar::tab {
+    background-color: #2d2d2d;
+    color: #888888;
+    padding: 8px 20px;
+    border: 1px solid #444444;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    margin-right: 2px;
+    font-size: 13px;
+}
+QTabBar::tab:selected {
+    background-color: #1e1e1e;
+    color: #ffffff;
+    border-bottom: 2px solid #2196F3;
+}
+QTabBar::tab:hover {
+    background-color: #3a3a3a;
+    color: #ffffff;
+}
 
-        self.lang_combo = QComboBox()
-        self.lang_combo.addItems(["zh", "en", "ja", "auto"])
-        self.lang_combo.setCurrentText(cfgs.get("whisper.language", {}).get("value", "zh"))
-        whisper_form.addRow("语言:", self.lang_combo)
+/* ---- 下拉框 ---- */
+QComboBox {
+    background-color: #333333;
+    color: #ffffff;
+    border: 1px solid #555555;
+    border-radius: 6px;
+    padding: 5px 10px;
+    min-width: 120px;
+    min-height: 20px;
+}
+QComboBox:hover {
+    border-color: #2196F3;
+}
+QComboBox::drop-down {
+    border: none;
+    width: 28px;
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+}
+QComboBox::down-arrow {
+    image: none;
+    border-left: 5px solid transparent;
+    border-right: 5px solid transparent;
+    border-top: 6px solid #888888;
+    margin-right: 8px;
+}
+QComboBox QAbstractItemView {
+    background-color: #333333;
+    color: #ffffff;
+    selection-background-color: #2196F3;
+    border: 1px solid #555555;
+    border-radius: 4px;
+    outline: none;
+}
 
-        layout.addWidget(whisper_group)
+/* ---- 分组框 ---- */
+QGroupBox {
+    background-color: #252525;
+    border: 1px solid #444444;
+    border-radius: 8px;
+    margin-top: 14px;
+    padding: 16px 12px 12px 12px;
+    font-weight: bold;
+    font-size: 13px;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    left: 12px;
+    padding: 0 6px;
+    color: #2196F3;
+}
 
-        buttons = QDialogButtonBox(
-            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
-        )
-        buttons.accepted.connect(self._on_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+/* ---- 标签 ---- */
+QLabel {
+    color: #cccccc;
+    background: transparent;
+}
 
-    def _on_accept(self):
-        self._config_set("whisper.model", self.model_combo.currentText())
-        self._config_set("whisper.device", self.device_combo.currentText())
-        self._config_set("whisper.compute_type", self.compute_combo.currentText())
-        self._config_set("whisper.language", self.lang_combo.currentText())
-        self.accept()
+/* ---- 状态栏 ---- */
+QStatusBar {
+    background-color: #252525;
+    color: #888888;
+    border-top: 1px solid #333333;
+    padding: 2px 8px;
+    font-size: 12px;
+}
+QStatusBar::item {
+    border: none;
+}
+
+/* ---- 滚动条 ---- */
+QScrollBar:vertical {
+    background-color: #1e1e1e;
+    width: 10px;
+    margin: 0;
+}
+QScrollBar::handle:vertical {
+    background-color: #555555;
+    min-height: 30px;
+    border-radius: 5px;
+}
+QScrollBar::handle:vertical:hover {
+    background-color: #777777;
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0;
+}
+QScrollBar:horizontal {
+    background-color: #1e1e1e;
+    height: 10px;
+    margin: 0;
+}
+QScrollBar::handle:horizontal {
+    background-color: #555555;
+    min-width: 30px;
+    border-radius: 5px;
+}
+QScrollBar::handle:horizontal:hover {
+    background-color: #777777;
+}
+QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    width: 0;
+}
+"""
 
 
 # ========================================================================
@@ -198,15 +430,21 @@ class TranscriptHighlighter:
 # ========================================================================
 
 class Media2MDWindow(QMainWindow):
-    """主窗口。"""
+    """主窗口 — 现代化暗色主题，侧边栏导航 + 标签式内容面板。"""
 
     def __init__(self):
         super().__init__()
         self.setWindowTitle("media2md-player")
         self.resize(1200, 700)
 
+        # 应用全局主题样式
+        self.setStyleSheet(DARK_THEME_QSS)
+
         self.current_file: Path | None = None
         self.transcript: Transcript | None = None
+        self.raw_transcript: Transcript | None = None
+        self.corrected_transcript: Transcript | None = None
+        self.guide_md: str | None = None
         self.config = load_env()
         self.api_config = get_api_config(self.config)
 
@@ -218,13 +456,14 @@ class Media2MDWindow(QMainWindow):
         self._worker: Worker | None = None
 
         self._build_menu()
-        self._build_toolbar()
         self._build_central()
         self._build_statusbar()
 
         self._position_timer = QTimer(self)
         self._position_timer.setInterval(200)
         self._position_timer.timeout.connect(self._on_position_changed)
+
+    # ========== 任务管理 ==========
 
     def _start_task(self, fn, *args, **kwargs):
         """在后台线程中启动一个耗时任务，期间禁用所有操作按钮。"""
@@ -269,6 +508,7 @@ class Media2MDWindow(QMainWindow):
 
     def _build_menu(self):
         menubar = self.menuBar()
+        # ---- 文件菜单 ----
         file_menu = menubar.addMenu("文件(&F)")
         open_action = QAction("打开文件(&O)...", self)
         open_action.triggered.connect(self._on_open_file)
@@ -280,6 +520,8 @@ class Media2MDWindow(QMainWindow):
         exit_action = QAction("退出(&X)", self)
         exit_action.triggered.connect(self.close)
         file_menu.addAction(exit_action)
+
+        # ---- 处理菜单 ----
         process_menu = menubar.addMenu("处理(&P)")
         correct_action = QAction("AI 文稿修正(&C)", self)
         correct_action.triggered.connect(self._on_correct)
@@ -288,7 +530,7 @@ class Media2MDWindow(QMainWindow):
         guide_action.triggered.connect(self._on_generate_guide)
         process_menu.addAction(guide_action)
 
-        # 设置菜单
+        # ---- 设置菜单 ----
         settings_menu = menubar.addMenu("设置(&S)")
         setup_action = QAction("初始化环境(&I)...", self)
         setup_action.triggered.connect(self._on_setup)
@@ -297,65 +539,290 @@ class Media2MDWindow(QMainWindow):
         pref_action.triggered.connect(self._on_settings)
         settings_menu.addAction(pref_action)
 
-    def _build_toolbar(self):
-        toolbar = QToolBar("主工具栏")
-        self.addToolBar(toolbar)
-        self.play_btn = QPushButton()
-        self.play_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
-        self.play_btn.clicked.connect(self._on_play_pause)
-        toolbar.addWidget(self.play_btn)
-        self.position_slider = QSlider(Qt.Orientation.Horizontal)
-        self.position_slider.setMinimum(0)
-        self.position_slider.setMaximum(0)
-        self.position_slider.sliderMoved.connect(self._on_seek)
-        toolbar.addWidget(self.position_slider)
-        self.time_label = QLabel("00:00 / 00:00")
-        toolbar.addWidget(self.time_label)
-
     def _build_central(self):
-        splitter = QSplitter(Qt.Orientation.Horizontal)
+        central = QWidget()
+        main_layout = QHBoxLayout(central)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # 左侧：视频播放器
+        # ---- 左侧边栏 ----
+        self._build_sidebar(main_layout)
+
+        # ---- 右侧主面板 ----
+        right_panel = QWidget()
+        right_panel.setObjectName("rightPanel")
+        right_layout = QVBoxLayout(right_panel)
+        right_layout.setContentsMargins(8, 8, 8, 8)
+        right_layout.setSpacing(8)
+
+        # 视频区域 + 标签内容上下分栏
+        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setHandleWidth(4)
+        splitter.setStyleSheet(
+            "QSplitter::handle { background: #444444; border-radius: 2px; }"
+        )
+
+        # ---- 上半：视频播放器 ----
         video_container = QWidget()
         video_layout = QVBoxLayout(video_container)
         video_layout.setContentsMargins(0, 0, 0, 0)
+        video_layout.setSpacing(6)
+
         self.video_widget = QVideoWidget()
-        self.video_widget.setMinimumSize(400, 300)
+        self.video_widget.setMinimumSize(400, 220)
+        self.video_widget.setStyleSheet("background-color: #000000; border-radius: 6px;")
         video_layout.addWidget(self.video_widget)
+
         self.player = QMediaPlayer()
         self.player.setAudioOutput(self.audio_output)
         self.player.setVideoOutput(self.video_widget)
         self.player.positionChanged.connect(self._on_position_changed)
         self.player.durationChanged.connect(self._on_duration_changed)
         self.player.errorOccurred.connect(self._on_player_error)
-        self.load_btn = QPushButton("打开音视频文件...")
+
+        # 播放控制栏
+        controls = QHBoxLayout()
+        controls.setSpacing(10)
+
+        self.play_btn = QPushButton("\u25b6")
+        self.play_btn.setFixedSize(38, 32)
+        self.play_btn.setStyleSheet(
+            "QPushButton { font-size: 16px; padding: 0; border-radius: 16px; }"
+        )
+        self.play_btn.clicked.connect(self._on_play_pause)
+        controls.addWidget(self.play_btn)
+
+        self.position_slider = QSlider(Qt.Orientation.Horizontal)
+        self.position_slider.setMinimum(0)
+        self.position_slider.setMaximum(0)
+        self.position_slider.sliderMoved.connect(self._on_seek)
+        controls.addWidget(self.position_slider)
+
+        self.time_label = QLabel("00:00 / 00:00")
+        self.time_label.setStyleSheet("color: #888888; font-size: 12px; min-width: 100px;")
+        controls.addWidget(self.time_label)
+
+        video_layout.addLayout(controls)
+
+        # 打开文件按钮（视频未加载时显示）
+        self.load_btn = QPushButton("\U0001f4c2 打开音视频文件...")
+        self.load_btn.setObjectName("action_btn")
         self.load_btn.clicked.connect(self._on_open_file)
         video_layout.addWidget(self.load_btn)
+
         splitter.addWidget(video_container)
 
-        # 右侧：文稿面板
-        transcript_container = QWidget()
-        transcript_layout = QVBoxLayout(transcript_container)
-        toolbar_right = QHBoxLayout()
-        self.btn_transcribe = QPushButton("转写")
+        # ---- 下半：操作按钮 + 标签页 ----
+        bottom_panel = QWidget()
+        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout.setContentsMargins(0, 0, 0, 0)
+        bottom_layout.setSpacing(8)
+
+        # 操作按钮栏
+        action_bar = QHBoxLayout()
+        action_bar.setSpacing(10)
+
+        self.btn_transcribe = QPushButton("\U0001f399\ufe0f 转写")
+        self.btn_transcribe.setObjectName("action_btn")
         self.btn_transcribe.clicked.connect(self._on_transcribe)
-        self.btn_correct = QPushButton("AI 修正")
+
+        self.btn_correct = QPushButton("\u270f\ufe0f AI修正")
+        self.btn_correct.setObjectName("action_btn")
         self.btn_correct.clicked.connect(self._on_correct)
-        self.btn_guide = QPushButton("导读")
+
+        self.btn_guide = QPushButton("\U0001f4d6 导读")
+        self.btn_guide.setObjectName("action_btn")
         self.btn_guide.clicked.connect(self._on_generate_guide)
-        self.btn_export = QPushButton("导出 Markdown")
+
+        self.btn_export = QPushButton("\U0001f4be 导出")
+        self.btn_export.setObjectName("action_btn")
         self.btn_export.clicked.connect(self._on_export)
+
         for btn in [self.btn_transcribe, self.btn_correct, self.btn_guide, self.btn_export]:
-            toolbar_right.addWidget(btn)
-        transcript_layout.addLayout(toolbar_right)
+            action_bar.addWidget(btn)
+        action_bar.addStretch()
+        bottom_layout.addLayout(action_bar)
+
+        # 标签页
+        self.tab_widget = QTabWidget()
+
+        # ---- Tab 0: 文稿 ----
+        self.transcript_tab = QWidget()
+        tab0_layout = QVBoxLayout(self.transcript_tab)
+        tab0_layout.setContentsMargins(0, 0, 0, 0)
         self.transcript_edit = QTextEdit()
         self.transcript_edit.setReadOnly(True)
         self.transcript_edit.setFont(QFont("Microsoft YaHei", 10))
-        transcript_layout.addWidget(self.transcript_edit)
-        splitter.addWidget(transcript_container)
-        splitter.setSizes([500, 500])
-        self.setCentralWidget(splitter)
+        tab0_layout.addWidget(self.transcript_edit)
+        self.tab_widget.addTab(self.transcript_tab, "文稿")
+
+        # ---- Tab 1: 修正版 ----
+        self.corrected_tab = QWidget()
+        tab1_layout = QVBoxLayout(self.corrected_tab)
+        tab1_layout.setContentsMargins(0, 0, 0, 0)
+        self.corrected_edit = QTextEdit()
+        self.corrected_edit.setReadOnly(True)
+        self.corrected_edit.setFont(QFont("Microsoft YaHei", 10))
+        tab1_layout.addWidget(self.corrected_edit)
+        self.tab_widget.addTab(self.corrected_tab, "修正版")
+
+        # ---- Tab 2: 导读 ----
+        self.guide_tab = QWidget()
+        tab2_layout = QVBoxLayout(self.guide_tab)
+        tab2_layout.setContentsMargins(0, 0, 0, 0)
+        self.guide_edit = QTextEdit()
+        self.guide_edit.setReadOnly(True)
+        self.guide_edit.setFont(QFont("Microsoft YaHei", 10))
+        tab2_layout.addWidget(self.guide_edit)
+        self.tab_widget.addTab(self.guide_tab, "导读")
+
+        # ---- Tab 3: 设置 ----
+        self.settings_tab = QWidget()
+        self._build_settings_form()
+        self.tab_widget.addTab(self.settings_tab, "设置")
+
+        bottom_layout.addWidget(self.tab_widget)
+        splitter.addWidget(bottom_panel)
+
+        # 初始比例：视频 35%，内容 65%
+        splitter.setSizes([280, 520])
+        splitter.setStretchFactor(0, 3)
+        splitter.setStretchFactor(1, 7)
+
+        right_layout.addWidget(splitter)
+        main_layout.addWidget(right_panel)
+        self.setCentralWidget(central)
+
+        # 高亮跟踪器（关联到文稿标签页的文本框）
         self.highlighter = TranscriptHighlighter(self.transcript_edit)
+
+    def _build_sidebar(self, parent_layout):
+        """构建左侧导航栏。"""
+        sidebar = QWidget()
+        sidebar.setFixedWidth(52)
+        sidebar.setObjectName("sidebar")
+        sidebar.setStyleSheet(
+            "QWidget#sidebar { background-color: #252525; border-right: 1px solid #333333; }"
+        )
+
+        sidebar_layout = QVBoxLayout(sidebar)
+        sidebar_layout.setContentsMargins(0, 4, 0, 4)
+        sidebar_layout.setSpacing(0)
+
+        # 按钮配置：(图标, 提示文本, 回调, 参数)
+        btn_configs = [
+            ("\U0001f4c1", "打开文件", self._on_open_file, None),
+            ("\U0001f4dd", "文稿", self._on_sidebar_switch_tab, 0),
+            ("\u270f\ufe0f", "修正版", self._on_sidebar_switch_tab, 1),
+            ("\U0001f4d6", "导读", self._on_sidebar_switch_tab, 2),
+            ("\u2699\ufe0f", "设置", self._on_sidebar_switch_tab, 3),
+        ]
+
+        self.side_buttons = []
+        for i, (icon, tip, callback, arg) in enumerate(btn_configs):
+            btn = QPushButton(icon)
+            btn.setObjectName("sidebar_btn")
+            btn.setToolTip(tip)
+            btn.setCheckable(True)
+            btn.setCursor(Qt.CursorShape.PointingHandCursor)
+            if arg is not None:
+                btn.clicked.connect(lambda checked, idx=arg: callback(idx))
+            else:
+                btn.clicked.connect(callback)
+            sidebar_layout.addWidget(btn)
+            self.side_buttons.append(btn)
+
+        sidebar_layout.addStretch()
+        parent_layout.addWidget(sidebar)
+
+        # 默认选中第二个（文稿）
+        if len(self.side_buttons) > 1:
+            self.side_buttons[1].setChecked(True)
+
+    def _on_sidebar_switch_tab(self, index: int):
+        """侧边栏按钮切换标签页。"""
+        for i, btn in enumerate(self.side_buttons):
+            btn.setChecked(i == index + 1)
+        self.tab_widget.setCurrentIndex(index)
+
+    def _build_settings_form(self):
+        """构建设置标签页的表单。"""
+        layout = QVBoxLayout(self.settings_tab)
+        layout.setSpacing(16)
+        layout.setContentsMargins(16, 16, 16, 16)
+
+        # ---- Whisper 设置组 ----
+        whisper_group = QGroupBox("Whisper 转写设置")
+        whisper_form = QFormLayout(whisper_group)
+        whisper_form.setSpacing(12)
+        whisper_form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
+
+        cfgs = {c["key"]: c for c in config_list()}
+
+        # 模型大小
+        self.model_combo = QComboBox()
+        for m in ["tiny", "base", "small", "medium", "large"]:
+            self.model_combo.addItem(m, m)
+        self.model_combo.setCurrentText(cfgs.get("whisper.model", {}).get("value", "medium"))
+        self.model_combo.currentTextChanged.connect(
+            lambda t: config_set("whisper.model", t)
+        )
+        whisper_form.addRow("模型大小:", self.model_combo)
+
+        # 设备
+        self.device_combo = QComboBox()
+        self.device_combo.addItems(["cuda", "cpu"])
+        self.device_combo.setCurrentText(cfgs.get("whisper.device", {}).get("value", "cuda"))
+        self.device_combo.currentTextChanged.connect(
+            lambda t: config_set("whisper.device", t)
+        )
+        whisper_form.addRow("转写设备:", self.device_combo)
+
+        # 计算精度
+        self.compute_combo = QComboBox()
+        self.compute_combo.addItems(["float16", "int8", "float32"])
+        current = cfgs.get("whisper.compute_type", {}).get("value", "float16")
+        self.compute_combo.setCurrentText(current)
+        self.compute_combo.currentTextChanged.connect(
+            lambda t: config_set("whisper.compute_type", t)
+        )
+        whisper_form.addRow("计算精度:", self.compute_combo)
+
+        # 语言
+        self.lang_combo = QComboBox()
+        self.lang_combo.addItems(["zh", "en", "ja", "auto"])
+        self.lang_combo.setCurrentText(cfgs.get("whisper.language", {}).get("value", "zh"))
+        self.lang_combo.currentTextChanged.connect(
+            lambda t: config_set("whisper.language", t)
+        )
+        whisper_form.addRow("语言:", self.lang_combo)
+
+        layout.addWidget(whisper_group)
+
+        # ---- 环境初始化组 ----
+        setup_group = QGroupBox("环境初始化")
+        setup_layout = QVBoxLayout(setup_group)
+        setup_layout.setSpacing(10)
+
+        self.setup_btn = QPushButton("\U0001f680 初始化转写环境")
+        self.setup_btn.setObjectName("action_btn")
+        self.setup_btn.setStyleSheet(
+            "QPushButton { background-color: #1565C0; border-color: #1976D2; font-weight: bold; }"
+            "QPushButton:hover { background-color: #1976D2; }"
+            "QPushButton:pressed { background-color: #0D47A1; }"
+        )
+        self.setup_btn.clicked.connect(self._on_setup)
+        setup_layout.addWidget(self.setup_btn)
+
+        self.setup_status = QLabel("点击上方按钮检查并初始化 Whisper 转写环境")
+        self.setup_status.setStyleSheet(
+            "color: #888888; font-style: italic; padding: 4px 0;"
+        )
+        self.setup_status.setWordWrap(True)
+        setup_layout.addWidget(self.setup_status)
+
+        layout.addWidget(setup_group)
+        layout.addStretch()
 
     def _build_statusbar(self):
         self.status_bar = QStatusBar()
@@ -383,13 +850,22 @@ class Media2MDWindow(QMainWindow):
             self.load_btn.hide()
             self.play_btn.setEnabled(True)
             self._position_timer.start()
+            # 切换到文稿标签页
+            self.tab_widget.setCurrentIndex(0)
+            self._on_sidebar_switch_tab(0)
 
     def _load_transcript(self):
         if not self.current_file:
             return
-        self.transcript = extract_transcript(self.current_file)
-        if self.transcript.segments:
-            self._display_transcript(self.transcript)
+        self.raw_transcript = extract_transcript(self.current_file)
+        if self.raw_transcript.segments:
+            self.transcript = self.raw_transcript
+            self.transcript_edit.setPlainText(self.raw_transcript.to_markdown())
+            self.highlighter.set_transcript(self.raw_transcript)
+            self.status_bar.showMessage(
+                f"文稿已加载: {len(self.raw_transcript.segments)} 段落 "
+                f"(来源: {self.raw_transcript.source_type.value})"
+            )
         else:
             audio_exts = {".mp3", ".wav", ".m4a", ".aac", ".flac", ".ogg", ".opus"}
             is_audio = self.current_file.suffix.lower() in audio_exts
@@ -398,14 +874,8 @@ class Media2MDWindow(QMainWindow):
             else:
                 hint = "未找到字幕。\n\n点击「转写」按钮使用 Whisper 语音识别。"
             self.transcript_edit.setPlainText(hint)
-
-    def _display_transcript(self, transcript: Transcript):
-        md = transcript.to_markdown()
-        self.transcript_edit.setPlainText(md)
-        self.highlighter.set_transcript(transcript)
-        self.status_bar.showMessage(
-            f"文稿已加载: {len(transcript.segments)} 段落 (来源: {transcript.source_type.value})"
-        )
+            self.corrected_edit.clear()
+            self.guide_edit.clear()
 
     # ---- 转写 ----
 
@@ -439,12 +909,19 @@ class Media2MDWindow(QMainWindow):
         # 重连信号以处理转写结果
         self._worker.finished.connect(self._on_transcribe_done)
 
-
     def _on_transcribe_done(self, result):
         """转写完成后在主线程更新 UI。"""
+        self.raw_transcript = result
         self.transcript = result
-        self._display_transcript(self.transcript)
-
+        md = result.to_markdown()
+        self.transcript_edit.setPlainText(md)
+        self.highlighter.set_transcript(result)
+        self.status_bar.showMessage(
+            f"转写完成: {len(result.segments)} 段落"
+        )
+        # 自动切换到「文稿」标签页
+        self.tab_widget.setCurrentIndex(0)
+        self._on_sidebar_switch_tab(0)
 
     # ---- AI 修正 ----
 
@@ -470,12 +947,16 @@ class Media2MDWindow(QMainWindow):
             source_type=self.transcript.source_type,
             source_path=self.transcript.source_path,
         )
+        self.corrected_transcript = corrected
         self.transcript = corrected
-        self._display_transcript(corrected)
+        md = corrected.to_markdown()
+        self.corrected_edit.setPlainText(md)
         self.status_bar.showMessage(
             f"修正完成: {len(result.logs)} 处修改, {len(result.review_needed)} 处待审核"
         )
-
+        # 自动切换到「修正版」标签页
+        self.tab_widget.setCurrentIndex(1)
+        self._on_sidebar_switch_tab(1)
 
     # ---- 导读 ----
 
@@ -502,9 +983,12 @@ class Media2MDWindow(QMainWindow):
 
     def _on_guide_done(self, guide):
         guide_md = guide.to_markdown()
-        self.transcript_edit.setPlainText(guide_md)
+        self.guide_md = guide_md
+        self.guide_edit.setPlainText(guide_md)
         self.status_bar.showMessage("导读生成完成")
-
+        # 自动切换到「导读」标签页
+        self.tab_widget.setCurrentIndex(2)
+        self._on_sidebar_switch_tab(2)
 
     # ---- 导出 ----
 
@@ -523,9 +1007,9 @@ class Media2MDWindow(QMainWindow):
     # ---- 设置 ----
 
     def _on_settings(self):
-        """打开设置对话框。"""
-        dlg = SettingsDialog(self)
-        dlg.exec()
+        """打开设置标签页。"""
+        self.tab_widget.setCurrentIndex(3)
+        self._on_sidebar_switch_tab(3)
 
     def _on_setup(self):
         """初始化环境。"""
@@ -534,6 +1018,8 @@ class Media2MDWindow(QMainWindow):
         env = check_env()
         if env.ready_to_transcribe:
             QMessageBox.information(self, "初始化", "环境已就绪，无需初始化。")
+            self.setup_status.setText("\u2705 环境已就绪")
+            self.setup_status.setStyleSheet("color: #4CAF50; font-style: normal;")
             return
 
         msg = "将执行以下步骤:\n"
@@ -548,20 +1034,32 @@ class Media2MDWindow(QMainWindow):
         if reply != QMessageBox.StandardButton.Yes:
             return
 
+        self.setup_status.setText("\u23f3 正在初始化环境...")
+        self.setup_status.setStyleSheet("color: #FFA726; font-style: normal;")
         self.status_bar.showMessage("正在初始化...")
         self._start_task(_run_setup)
-        self._worker.finished.connect(lambda r: self.status_bar.showMessage("初始化完成"))
-        self._worker.error.connect(lambda e: self.status_bar.showMessage(f"初始化失败: {e[:50]}"))
+        self._worker.finished.connect(self._on_setup_done)
+        self._worker.error.connect(self._on_setup_error)
+
+    def _on_setup_done(self, result):
+        self.setup_status.setText("\u2705 环境初始化完成")
+        self.setup_status.setStyleSheet("color: #4CAF50; font-style: normal;")
+        self.status_bar.showMessage("初始化完成")
+
+    def _on_setup_error(self, message: str):
+        self.setup_status.setText("\u274c 初始化失败")
+        self.setup_status.setStyleSheet("color: #EF5350; font-style: normal;")
+        self.status_bar.showMessage(f"初始化失败: {message[:50]}")
 
     # ---- 播放控制 ----
 
     def _on_play_pause(self):
         if self.player.playbackState() == QMediaPlayer.PlaybackState.PlayingState:
             self.player.pause()
-            self.play_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+            self.play_btn.setText("\u25b6")
         else:
             self.player.play()
-            self.play_btn.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPause))
+            self.play_btn.setText("\u23f8")
 
     def _on_seek(self, position: int):
         self.player.setPosition(position)
