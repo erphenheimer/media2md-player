@@ -114,7 +114,7 @@ def call_api(
     """调用兼容 OpenAI 的 chat-completions API。"""
     api_key = api_config.get("api_key", "")
     if not api_key or api_key == "your_api_key_here":
-        print("[corrector] ⚠️ API_KEY 未配置，跳过 API 调用")
+        print("[corrector] WARN: API_KEY 未配置，跳过 API 调用")
         return None
 
     headers = {
@@ -133,7 +133,7 @@ def call_api(
 
     url = api_config.get("api_url", "")
     if not url:
-        print("[corrector] ⚠️ API_URL 未配置")
+        print("[corrector] WARN: API_URL 未配置")
         return None
 
     for attempt in range(max_retries):
@@ -144,11 +144,11 @@ def call_api(
             content = data["choices"][0]["message"]["content"]
             return content.strip()
         except requests.exceptions.Timeout:
-            print(f"[corrector] ⏱️ 超时 (尝试 {attempt+1}/{max_retries})")
+            print(f"[corrector] TIME_OUT 超时 (尝试 {attempt+1}/{max_retries})")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
         except requests.exceptions.RequestException as e:
-            print(f"[corrector] ❌ API 请求失败: {e}")
+            print(f"[corrector] ERROR: API 请求失败: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
             else:
@@ -258,6 +258,6 @@ def correct_transcript(
                 f.write("以下段落包含不确定的修正，需要人工审核：\n\n")
                 for log in result.review_needed:
                     f.write(f"- [{log.start_ms}ms] {log.original_text}\n")
-                    f.write(f"  → {log.corrected_text}\n\n")
+                    f.write(f"  -> {log.corrected_text}\n\n")
 
     return result

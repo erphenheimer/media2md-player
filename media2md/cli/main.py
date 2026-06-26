@@ -13,7 +13,7 @@ def main():
 
     # media2md process
     p_process = sub.add_parser("process", help="全流程处理：提取→修正→导读→导出")
-    p_process.add_argument("input", help="输入文件路径")
+    p_process.add_argument("input", help="输入文件路径（音视频/字幕）")
     p_process.add_argument("--output", "-o", default="output", help="输出目录 (默认: output)")
     p_process.add_argument("--force", action="store_true", help="强制重新处理已存在的文件")
     p_process.add_argument("--skip-correct", action="store_true", help="跳过 AI 修正步骤")
@@ -26,7 +26,7 @@ def main():
 
     # media2md correct
     p_corr = sub.add_parser("correct", help="仅 AI 修正文稿")
-    p_corr.add_argument("input", help="文稿文件路径 (txt 或 json)")
+    p_corr.add_argument("input", help="文稿文件路径 (.txt 或 .json)")
     p_corr.add_argument("--output", "-o", default="output", help="输出目录")
 
     # media2md guide
@@ -36,7 +36,7 @@ def main():
 
     # media2md export
     p_export = sub.add_parser("export", help="仅导出 Markdown")
-    p_export.add_argument("input", help="文稿或导读数据路径")
+    p_export.add_argument("input", help="文稿数据路径")
     p_export.add_argument("--output", "-o", default="output", help="输出目录")
 
     args = parser.parse_args()
@@ -58,8 +58,9 @@ def main():
 
 
 def run_process(args):
-    """全流程处理（占位）。"""
+    """全流程处理。"""
     from media2md.pipeline.orchestrator import run_full_pipeline
+
     run_full_pipeline(
         input_path=args.input,
         output_dir=args.output,
@@ -70,27 +71,92 @@ def run_process(args):
 
 
 def run_transcribe(args):
-    """仅转写（占位）。"""
-    print(f"[占位] 转写: {args.input} -> {args.output}")
-    print("此功能将在后续 Phase 中实现。")
+    """仅转写。"""
+    from pathlib import Path
+    from media2md.pipeline.extractor import extract_transcript
+    from media2md.pipeline.transcriber import transcribe_file
+    from media2md.models.transcript import SourceType
+    from media2md.pipeline.exporter import export_transcript
+
+    src = Path(args.input)
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    transcript = extract_transcript(src)
+    if not transcript.segments and transcript.source_type == SourceType.WHISPER:
+        print("未找到字幕，启动 Whisper 转写...")
+        transcript = transcribe_file(src, process_dir=out_dir / ".process")
+
+    output_path = out_dir / f"{src.stem}_transcript.md"
+    export_transcript(transcript, output_path)
+    print(f"[DONE] 转写完成: {output_path}")
 
 
 def run_correct(args):
-    """仅修正（占位）。"""
-    print(f"[占位] 修正: {args.input} -> {args.output}")
-    print("此功能将在后续 Phase 中实现。")
+    """仅修正。"""
+    from pathlib import Path
+    from media2md.models.transcript import Transcript
+    from media2md.pipeline.corrector import correct_transcript
+    from media2md.utils.config import get_api_config
+
+    src = Path(args.input)
+    if src.suffix == ".json":
+        transcript = Transcript.from_json(src.read_text(encoding="utf-8"))
+    else:
+        # 纯文本文件，构造单段 Transcript
+        text = src.read_text(encoding="utf-8")
+        from media2md.models.transcript import TranscriptSegment
+        transcript = Transcript(
+            segments=[TranscriptSegment(start_ms=0, end_ms=0, text=text)],
+        )
+
+    api_config = get_api_config()
+    result = correct_transcript(transcript, api_config=api_config)
+
+    out_path = Path(args.output) / f"{src.stem}_corrected.md"
+    from media2md.models.transcript import Transcript as T
+    corrected = T(
+        segments=result.corrected_segments,
+        source_type=transcript.source_type,
+    )
+    from media2md.pipeline.exporter import export_transcript
+    export_transcript(corrected, out_path)
+    print(f"[DONE] 修正完成: {out_path}")
 
 
 def run_guide(args):
-    """仅导读（占位）。"""
-    print(f"[占位] 生成导读: {args.input} -> {args.output}")
-    print("此功能将在后续 Phase 中实现。")
+    """仅导读。"""
+    from pathlib import Path
+    from media2md.pipeline.guide_generator import generate_guide
+    from media2md.utils.config import get_api_config
+
+    text = Path(args.input).read_text(encoding="utf-8")
+    api_config = get_api_config()
+    guide = generate_guide(text, api_config=api_config)
+
+    out_path = Path(args.output) / f"{Path(args.input).stem}_guide.md"
+    from media2md.pipeline.exporter import export_guide
+    export_guide(guide, out_path)
+    print(f"[DONE] 导读生成: {out_path}")
 
 
 def run_export(args):
-    """仅导出（占位）。"""
-    print(f"[占位] 导出 Markdown: {args.input} -> {args.output}")
-    print("此功能将在后续 Phase 中实现。")
+    """仅导出（将现有文稿/导读重新导出为 Markdown）。"""
+    from pathlib import Path
+    from media2md.models.transcript import Transcript
+    from media2md.pipeline.exporter import export_transcript, export_guide
+
+    src = Path(args.input)
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    if src.suffix == ".json":
+        transcript = Transcript.from_json(src.read_text(encoding="utf-8"))
+        out_path = out_dir / f"{src.stem}_transcript.md"
+        export_transcript(transcript, out_path)
+        print(f"[DONE] 导出完成: {out_path}")
+    else:
+        print(f"跳过: {src.name}（目前仅支持 .json 格式导出）")
 
 
 if __name__ == "__main__":

@@ -95,7 +95,7 @@ def generate_guide(
     # 如果未配置 API，返回空的导读占位
     api_key = config.get("api_key", "")
     if not api_key or api_key == "your_api_key_here":
-        print("[guide] ⚠️ API_KEY 未配置，返回空导读占位")
+        print("[guide] WARN: API_KEY 未配置，返回空导读占位")
         return ReadingGuide(title=title, source_path="")
 
     system_prompt, user_prompt = build_guide_prompt(transcript_text, title)
@@ -139,13 +139,13 @@ def generate_guide(
                     source_path="",
                 )
             else:
-                print(f"[guide] ⚠️ 无法解析 API 响应 (尝试 {attempt+1}/{max_retries})")
+                print(f"[guide] WARN: 无法解析 API 响应 (尝试 {attempt+1}/{max_retries})")
         except requests.exceptions.Timeout:
-            print(f"[guide] ⏱️ 超时 (尝试 {attempt+1}/{max_retries})")
+            print(f"[guide] TIME_OUT 超时 (尝试 {attempt+1}/{max_retries})")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
         except (requests.exceptions.RequestException, json.JSONDecodeError) as e:
-            print(f"[guide] ❌ 错误: {e}")
+            print(f"[guide] ERROR: 错误: {e}")
             if attempt < max_retries - 1:
                 time.sleep(2 ** attempt)
             else:
