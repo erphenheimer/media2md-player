@@ -2,6 +2,8 @@
 
 音视频 → 文稿 → AI 修正 → 导读 → Markdown 导出一体化工具。
 
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+
 ## 功能
 
 - **字幕提取**：优先提取视频内嵌字幕，也支持外部 `.srt`/`.vtt` 文件
@@ -77,4 +79,4 @@ media2md-player/
 
 ## 许可证
 
-MIT
+GNU General Public License v3.0

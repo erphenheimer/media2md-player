@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "音视频 → 文稿 → AI 修正 → 导读 → Markdown 导出一体化工具"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = {text = "GPL-3.0-only"}
 authors = [
     {name = "media2md contributors"},
 ]
