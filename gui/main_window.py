@@ -52,6 +52,8 @@ from media2md.utils.config import (
     config_list,
     config_set,
 )
+from media2md.pipeline.batcher import BatchManager
+from gui.batch_tab import BatchTab
 
 
 # ========================================================================
@@ -453,6 +455,7 @@ class Media2MDWindow(QMainWindow):
         self.guide_md: str | None = None
         self.config = load_env()
         self.api_config = get_api_config(self.config)
+        self.batch_manager = BatchManager(self)
 
         self.audio_output = QAudioOutput()
         self.audio_output.setVolume(0.8)
@@ -699,6 +702,10 @@ class Media2MDWindow(QMainWindow):
         scroll.setWidget(self.settings_tab)
         self.tab_widget.addTab(scroll, "设置")
 
+        # ---- Tab 4: 批量处理 ----
+        self.batch_tab = BatchTab(self.batch_manager)
+        self.tab_widget.addTab(self.batch_tab, "批量")
+
         bottom_layout.addWidget(self.tab_widget)
         splitter.addWidget(bottom_panel)
 
@@ -733,6 +740,7 @@ class Media2MDWindow(QMainWindow):
             ("\U0001f4dd", "文稿", self._on_sidebar_switch_tab, 0),
             ("\u270f\ufe0f", "修正版", self._on_sidebar_switch_tab, 1),
             ("\U0001f4d6", "导读", self._on_sidebar_switch_tab, 2),
+            ("\U0001f4cb", "批量", self._on_sidebar_switch_tab, 4),
             ("\u2699\ufe0f", "设置", self._on_sidebar_switch_tab, 3),
         ]
 
