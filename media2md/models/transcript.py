@@ -34,12 +34,15 @@ class TranscriptSegment:
         s, ms_part = divmod(remainder, 1000)
         return f"{h:02d}:{m:02d}:{s:02d}.{ms_part:03d}"
 
-    def to_markdown_line(self) -> str:
+    def to_markdown_line(self, include_timestamps: bool = True) -> str:
         """导出为 Markdown 格式。"""
-        start_ts = self.format_timestamp(self.start_ms)
-        end_ts = self.format_timestamp(self.end_ms)
         speaker_tag = f"**{self.speaker}:** " if self.speaker else ""
-        return f"[{start_ts} --> {end_ts}] {speaker_tag}{self.text}"
+        if include_timestamps:
+            start_ts = self.format_timestamp(self.start_ms)
+            end_ts = self.format_timestamp(self.end_ms)
+            return f"[{start_ts} --> {end_ts}] {speaker_tag}{self.text}"
+        else:
+            return f"{speaker_tag}{self.text}"
 
     def to_srt_block(self, index: int) -> str:
         """导出为 SRT 格式。"""
@@ -64,8 +67,12 @@ class Transcript:
         """拼接所有段落的纯文本。"""
         return " ".join(seg.text for seg in self.segments)
 
-    def to_markdown(self) -> str:
-        """导出为带时间戳的 Markdown 文稿。"""
+    def to_markdown(self, include_timestamps: bool = True) -> str:
+        """导出为 Markdown 文稿。
+
+        Args:
+            include_timestamps: 是否保留时间戳（默认为 True）。
+        """
         lines = [f"# {self.title or '文稿'}", ""]
         lines.append(f"- 来源: {self.source_type.value}")
         lines.append(f"- 源文件: {self.source_path}")
@@ -76,7 +83,7 @@ class Transcript:
         lines.append("")
 
         for seg in self.segments:
-            lines.append(seg.to_markdown_line())
+            lines.append(seg.to_markdown_line(include_timestamps=include_timestamps))
 
         return "\n".join(lines)
 

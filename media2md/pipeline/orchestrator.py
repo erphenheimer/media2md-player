@@ -29,6 +29,7 @@ def run_full_pipeline(
     force: bool = False,
     skip_correct: bool = False,
     skip_guide: bool = False,
+    include_timestamps: bool = True,
     process_dir: Optional[str] = None,
 ):
     """全流程：提取字幕/Whisper -> AI 修正 -> 导读生成 -> Markdown 导出。"""
@@ -79,7 +80,7 @@ def run_full_pipeline(
         else:
             print(f"  [OK] 提取到 {len(transcript.segments)} 个段落 (来源: {transcript.source_type.value})")
 
-        export_transcript(transcript, outputs["transcript"])
+        export_transcript(transcript, outputs["transcript"], with_timestamps=include_timestamps)
         print(f"  [SAVE] 原始文稿 -> {outputs['transcript'].name}")
 
     # ========== Step 2: AI 修正 ==========
@@ -103,7 +104,7 @@ def run_full_pipeline(
                     source_path=transcript.source_path,
                     title=transcript.title,
                 )
-                export_transcript(corrected_transcript, outputs["corrected"])
+                export_transcript(corrected_transcript, outputs["corrected"], with_timestamps=include_timestamps)
                 export_correction_log(transcript, corrected_transcript, outputs["correction_log"])
                 print(f"  [OK] 修正完成: {len(result.logs)} 处修改, {len(result.review_needed)} 处待审核")
                 print(f"  [SAVE] 修正文稿 -> {outputs['corrected'].name}")

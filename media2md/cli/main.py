@@ -18,6 +18,7 @@ def main():
     p_process.add_argument("--force", action="store_true", help="强制重新处理已存在的文件")
     p_process.add_argument("--skip-correct", action="store_true", help="跳过 AI 修正步骤")
     p_process.add_argument("--skip-guide", action="store_true", help="跳过导读生成步骤")
+    p_process.add_argument("--no-timestamp", action="store_true", help="导出文稿不含时间戳")
 
     # media2md transcribe
     p_trans = sub.add_parser("transcribe", help="仅转写：字幕提取或 Whisper 转写")
@@ -38,6 +39,7 @@ def main():
     p_export = sub.add_parser("export", help="仅导出 Markdown")
     p_export.add_argument("input", help="文稿数据路径")
     p_export.add_argument("--output", "-o", default="output", help="输出目录")
+    p_export.add_argument("--no-timestamp", action="store_true", help="导出文稿不含时间戳")
 
     # media2md setup
     p_setup = sub.add_parser("setup", help="初始化环境（安装 Whisper + 下载模型）")
@@ -83,6 +85,7 @@ def run_process(args):
         force=args.force,
         skip_correct=args.skip_correct,
         skip_guide=args.skip_guide,
+        include_timestamps=not args.no_timestamp,
     )
 
 
@@ -169,7 +172,7 @@ def run_export(args):
     if src.suffix == ".json":
         transcript = Transcript.from_json(src.read_text(encoding="utf-8"))
         out_path = out_dir / f"{src.stem}_transcript.md"
-        export_transcript(transcript, out_path)
+        export_transcript(transcript, out_path, with_timestamps=not args.no_timestamp)
         print(f"[DONE] 导出完成: {out_path}")
     else:
         print(f"跳过: {src.name}（目前仅支持 .json 格式导出）")

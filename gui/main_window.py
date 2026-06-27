@@ -31,6 +31,8 @@ from PyQt6.QtWidgets import (
     QGroupBox,
     QLineEdit,
     QScrollArea,
+    QCheckBox,
+    QDialogButtonBox,
 )
 
 from media2md.models.transcript import Transcript, SourceType
@@ -1094,12 +1096,34 @@ class Media2MDWindow(QMainWindow):
         if not self.transcript:
             QMessageBox.warning(self, "提示", "没有可导出的内容。")
             return
+
+        # 弹出带选项的导出对话框
+        dialog = QDialog(self)
+        dialog.setWindowTitle("导出选项")
+        dialog.resize(350, 150)
+        layout = QVBoxLayout(dialog)
+
+        ts_cb = QCheckBox("保留时间戳")
+        ts_cb.setChecked(True)
+        ts_cb.setToolTip("勾选 = 每段前带 [HH:MM:SS.mmm --> HH:MM:SS.mmm]")
+        layout.addWidget(ts_cb)
+
+        buttons = QDialogButtonBox(
+            QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel
+        )
+        buttons.accepted.connect(dialog.accept)
+        buttons.rejected.connect(dialog.reject)
+        layout.addWidget(buttons)
+
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+
         output_dir = QFileDialog.getExistingDirectory(self, "选择导出目录")
         if not output_dir:
             return
         stem = self.current_file.stem if self.current_file else "output"
         paths = generate_output_paths(stem, output_dir)
-        export_transcript(self.transcript, paths["transcript"])
+        export_transcript(self.transcript, paths["transcript"], with_timestamps=ts_cb.isChecked())
         self.status_bar.showMessage(f"导出完成: {paths['transcript']}")
 
     # ---- 设置 ----

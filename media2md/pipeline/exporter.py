@@ -27,15 +27,9 @@ def export_transcript(
     path.parent.mkdir(parents=True, exist_ok=True)
 
     if with_timestamps:
-        content = transcript.to_markdown()
+        content = transcript.to_markdown(include_timestamps=True)
     else:
-        # 纯文本模式（不含时间戳）
-        lines = [f"# {transcript.title or '文稿'}", ""]
-        lines.append(f"- 来源: {transcript.source_type.value}")
-        lines.append(f"- 源文件: {transcript.source_path}")
-        lines.append("")
-        lines.append(transcript.full_text)
-        content = "\n".join(lines)
+        content = transcript.to_markdown(include_timestamps=False)
 
     path.write_text(content, encoding="utf-8")
     return path
