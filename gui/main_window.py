@@ -609,7 +609,8 @@ class Media2MDWindow(QMainWindow):
         video_layout.addLayout(controls)
 
         # 打开文件按钮（视频未加载时显示）
-        self.load_btn = QPushButton("\U0001f4c2 打开音视频文件...")
+        self.load_btn = QPushButton("\U0001f4c2 打开文件...")
+        self.load_btn.setToolTip("支持: mp4/mkv/mov/avi/mp3/wav 及 srt/vtt/ass 字幕文件")
         self.load_btn.setObjectName("action_btn")
         self.load_btn.clicked.connect(self._on_open_file)
         video_layout.addWidget(self.load_btn)
@@ -626,28 +627,28 @@ class Media2MDWindow(QMainWindow):
         action_bar = QHBoxLayout()
         action_bar.setSpacing(6)
 
-        self.btn_transcribe = QPushButton("\U0001f399\ufe0f")
-        self.btn_transcribe.setToolTip("转写")
+        self.btn_transcribe = QPushButton("\U0001f399\ufe0f 语音转写")
+        self.btn_transcribe.setToolTip("使用 Whisper 自动语音识别提取文稿")
         self.btn_transcribe.setObjectName("action_btn")
-        self.btn_transcribe.setFixedWidth(40)
+        self.btn_transcribe.setFixedWidth(110)
         self.btn_transcribe.clicked.connect(self._on_transcribe)
 
-        self.btn_correct = QPushButton("\u270f\ufe0f")
-        self.btn_correct.setToolTip("AI 修正")
+        self.btn_correct = QPushButton("\u270f\ufe0f AI 修正")
+        self.btn_correct.setToolTip("调用 AI API 修正转写错误（仅 Whisper 转写需此步骤）")
         self.btn_correct.setObjectName("action_btn")
-        self.btn_correct.setFixedWidth(40)
+        self.btn_correct.setFixedWidth(110)
         self.btn_correct.clicked.connect(self._on_correct)
 
-        self.btn_guide = QPushButton("\U0001f4d6")
-        self.btn_guide.setToolTip("导读")
+        self.btn_guide = QPushButton("\U0001f4d6 生成导读")
+        self.btn_guide.setToolTip("由 AI 自动生成结构化阅读指南")
         self.btn_guide.setObjectName("action_btn")
-        self.btn_guide.setFixedWidth(40)
+        self.btn_guide.setFixedWidth(110)
         self.btn_guide.clicked.connect(self._on_generate_guide)
 
-        self.btn_export = QPushButton("\U0001f4be")
-        self.btn_export.setToolTip("导出")
+        self.btn_export = QPushButton("\U0001f4be 导出文稿")
+        self.btn_export.setToolTip("将当前文稿导出为 Markdown 文件")
         self.btn_export.setObjectName("action_btn")
-        self.btn_export.setFixedWidth(40)
+        self.btn_export.setFixedWidth(110)
         self.btn_export.clicked.connect(self._on_export)
 
         for btn in [self.btn_transcribe, self.btn_correct, self.btn_guide, self.btn_export]:

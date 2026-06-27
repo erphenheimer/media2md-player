@@ -1,0 +1,1 @@
+        self.load_btn = QPushButton("\U0001f4c2 打开音视频文件...")
